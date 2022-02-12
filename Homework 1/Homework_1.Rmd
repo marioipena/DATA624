@@ -1,0 +1,228 @@
+---
+title: "DATA 624 Homework 1"
+author: "Mario Pena"
+date: "February 13, 2022"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(fpp3)
+library(ggplot2)
+```
+
+### Exercise 2.10.1
+
+Use the help function to explore what the series gafa_stock, PBS, vic_elec and pelt represent.
+
+*gafa_stock*: Historical stock prices from 2014-2018 for Google, Amazon, Facebook and Apple. All prices are in $USD.
+
+*PBS*: Monthly Medicare Australia prescription data from July 1991 to June 2008. It contains the total number of scripts and cost of the scripts in $AUD.
+
+*vic_elec*: Half-hourly electricity demand data for Victoria, Australia from 2012-2014. It includes total electricity demand in MW, temperature of Melbourne and indicator for whether a specific day is a public holiday.
+
+
+**a.** Use `autoplot()` to plot some of the series in these data sets.
+
+We can see below that `autoplot` can't interpret the interval of the data, this means we have encounterd data with irregular intervals.
+
+```{r}
+autoplot(gafa_stock)
+```
+
+In order to use `autoplot` with the PBS data, I borrowed some of the code from the book to subset the data, otherwise the results we were getting were not the ones expected. This Could be due to the large number of categories and medicines in this time series.
+
+```{r}
+PBS %>%
+  filter(ATC2 == "A10") %>%
+  select(Month, Concession, Type, Cost) %>%
+  summarise(TotalC = sum(Cost)) %>%
+  mutate(Cost = TotalC / 1e6) -> a10
+autoplot(a10)
+```
+
+We can observe the seasonal pattern for electricity demand in Victoria, Australia. It is evident that there is an increase in demand at the beginning of each year, which is the summer time in Australia.
+
+```{r}
+autoplot(vic_elec)
+```
+
+**b.** What is the time interval of each series?
+
+*gafa_stock*: Irregular interval.
+*PBS*: Monthly.
+*vic_elec*: Half-hourly.
+
+### Exercise 2.10.2
+
+Use `filter()` to find what days corresponded to the peak closing price for each of the four stocks in `gafa_stock`.
+
+For the following exercise, we must also include the `group_by()` function in order to group the data by "Symbol" or stock and show the desired result for each of the four stocks. Failing to add the `group_by()` function, and only using the `filter()` function, would result in only getting the day in which any of the four stocks had the peak closing price in the whole data set.
+
+
+```{r}
+gafa_stock %>% group_by(Symbol) %>% filter(Close == max(Close))
+```
+
+
+### Exercise 2.10.3
+
+Download the file tute1.csv from the book website, open it in Excel (or some other spreadsheet application), and review its contents. You should find four columns of information. Columns B through D each contain a quarterly series, labelled Sales, AdBudget and GDP. Sales contains the quarterly sales for a small company over the period 1981-2005. AdBudget is the advertising budget and GDP is the gross domestic product. All series have been adjusted for inflation.
+
+**a.** You can read the data into R with the following script:
+```{r}
+tute1 <- readr::read_csv("tute1.csv")
+View(tute1)
+```
+
+**b.** Convert the data to time series
+```{r}
+mytimeseries <- tute1 %>%
+  mutate(Quarter = yearmonth(Quarter)) %>%
+  as_tsibble(index = Quarter)
+```
+
+**c.** Construct time series plots of each of the three series
+```{r}
+mytimeseries %>%
+  pivot_longer(-Quarter) %>%
+  ggplot(aes(x = Quarter, y = value, colour = name)) +
+  geom_line() +
+  facet_grid(name ~ ., scales = "free_y")
+```
+
+Check what happens when you don’t include `facet_grid()`.
+
+```{r}
+mytimeseries %>%
+  pivot_longer(-Quarter) %>%
+  ggplot(aes(x = Quarter, y = value, colour = name)) +
+  geom_line()
+```
+
+Without using `facet_grid()` we have the plots of all three time series in the same graph and the same scale. This makes it a bit harder to see the variation of the data. As it is evident on the first plot, all three series have very similar seasonality, but if we look at the bottom plot, they seem to be quite different.
+
+
+### Exercise 2.10.4
+
+The `USgas` package contains data on the demand for natural gas in the US.
+
+**a.** Install the `USgas` package.
+
+```{r}
+
+library(USgas)
+```
+
+**b.** Create a tsibble from `us_total` with year as the index and state as the key.
+
+I used the examples from the book to construct the tsibble from `us_total` and made year the index and state the key.
+
+```{r}
+mytimeseries2 <- us_total %>%
+  as_tsibble(key = state, index = year)
+```
+
+**c.** Plot the annual natural gas consumption by state for the New England area (comprising the states of Maine, Vermont, New Hampshire, Massachusetts, Connecticut and Rhode Island).
+
+I used some of the code examples from the book to filter the data by the desired states that we were asked to observe and plot them on separate graphs with different scales. I also decided to split the states in two groups (two `ggplot()` functions) because even with the `facet_grid()` function the plot lines looked misleading and did not represent the data accurately or as accurate. Perhaps the graphs produced were too small in order to fit all six states in one `facet_grid()` display.
+
+We can observe that the natural gas consumption for Connecticut and Massachusetts has been growing more or less steadily. Maine reached its peak consumption in the early 2000's, and has been slowly decreasing thereafter, While a similar trend has happened with the consumption in New Hampshire after reaching its peak around 2004. Vermont had a constant consumption more or less until the year 2010 where it began to see an upward trend thereafter. Rhode Island has had some ups and downs in ther gas consumption, with its peak in the late 1990's, its lowest in 2005, followed by some more ups and downs in the subsequent years.
+
+```{r}
+mytimeseries2 %>%
+  filter(state == c('Maine', 'Vermont', 'New Hampshire')) %>%
+  ggplot(aes(x = year, y = y, colour = state)) +
+  geom_line() +
+  facet_grid(state ~ ., scales = "free_y")
+```
+
+```{r}
+mytimeseries2 %>%
+  filter(state == c('Massachusetts', 'Connecticut', 'Rhode Island')) %>%
+  ggplot(aes(x = year, y = y, colour = state)) +
+  geom_line() +
+  facet_grid(state ~ ., scales = "free_y")
+```
+
+### Exercise 2.10.5
+
+**a.** Download `tourism.xlsx` from the book website and read it into R using `readxl::read_excel()`.
+
+```{r}
+tourism <- readxl::read_excel("tourism.xlsx")
+```
+
+**b.** Create a tsibble which is identical to the `tourism` tsibble from the `tsibble` package.
+
+I first used the help function to explore what the `tourism` tsibble looks like, and then I followed the books examples on creating tsibbles while identifying the "index" column and the "key" columns.
+
+```{r}
+tour_tsibble <- tourism %>%
+  mutate(Quarter = yearquarter(Quarter)) %>%
+  as_tsibble(key = c(Region, State, Purpose), index = Quarter)
+tour_tsibble
+```
+
+**c.** Find what combination of `Region` and `Purpose` had the maximum number of overnight trips on average.
+
+For this exercie I built a sequence of operations through the pipe function. The first operation used is the `group_by()` function in order to find the average of overnight trips by `Region` and `Purpose` with the `summarise()` function after. Then using the `ungroup()` function before filtering the data to find the maximum number of trips, allows to get one result. Failing to `ungroup()` before filtering will cause to output the result of the maximum number of trips for every `Region` and `Purpose` combination.
+
+```{r}
+tour_tsibble %>% group_by(Region, Purpose) %>%
+ summarise(Trips = mean(Trips)) %>%
+ ungroup() %>%
+ filter(Trips == max(Trips))
+```
+
+**d.** Create a new tsibble which combines the Purposes and Regions, and just has total trips by State.
+
+In this exercise I understood that we were just to find the total number of trips by State, which it implies that Purposes and Regions would already be combined when calculating this number. Thus, I used the `group_by()` function with states and then the `summarise()` function to sum up all the trips and saved it as a new tsibble under a new name. The result is the total number of trips by State and by the index (Quarter).
+
+```{r}
+new_tour_tsibble <- tour_tsibble %>%
+ group_by(State) %>% 
+ summarise(Trips = sum(Trips))
+new_tour_tsibble
+```
+
+
+### Exercise 2.10.8
+
+Monthly Australian retail data is provided in `aus_retail`. Select one of the time series as follows (but choose your own seed value):
+
+```{r}
+set.seed(123)
+myseries <- aus_retail %>%
+  filter(`Series ID` == sample(aus_retail$`Series ID`,1))
+```
+
+Explore your chosen retail time series using the following functions:
+
+`autoplot()`, `gg_season()`, `gg_subseries()`, `gg_lag()`, `ACF() %>% autoplot()`
+
+```{r}
+autoplot(myseries, Turnover)
+gg_season(myseries, Turnover)
+gg_subseries(myseries, Turnover)
+gg_lag(myseries, Turnover, geom = 'point')
+myseries %>% ACF(Turnover) %>% autoplot()
+```
+
+Can you spot any seasonality, cyclicity and trend? What do you learn about the series?
+
+We can clearly see seasonality in the autoplot() graph above. We keep seeing a simmiliar pattern each year, there seems to be a peak at the end of each year, and then goes back down. This could be due to what we discussed in class where we see retailers have the majority of their sales during the months of November and December (Holiday Season, at least in this part of the world).
+
+We can also observe seasonality as it is evident by the `gg_season()` and the `gg_subseries()` plots.
+
+I can't say that I see a cycle in the data but we can clearly see an upward trend in turnover. The lag plots show a strong positive relationship and autocorrelation plots show both trend and seasonality. As it is explained in our text book with respect to autocorrelation "The slow decrease in the ACF as the lags increase is due to the trend, while the “scalloped” shape is due to the seasonality.".
