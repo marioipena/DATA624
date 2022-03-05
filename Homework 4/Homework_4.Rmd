@@ -1,0 +1,235 @@
+---
+title: "DATA 624 Homework 4"
+author: "Mario Pena"
+date: "March, 6 2022"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(DataExplorer)
+library(moments)
+library(MASS)
+library(data.table)
+library(caret)
+```
+
+### Exercise 3.1
+
+The UC Irvine Machine Learning Repository contains a data set related to glass identification. The data consist of 214 glass samples labeled as one of seven class categories. There are nine predictors, including the refractive index and percentages of eight elements: Na, Mg, Al, Si, K, Ca, Ba, and Fe. The data can be accessed via:
+
+```{r}
+library(mlbench)
+data(Glass)
+str(Glass)
+```
+
+**a.** Using visualizations, explore the predictor variables to understand their distributions as well as the relationships between predictors.
+
+Firstly, as we can see below, none of the predictor variables seem to have any missing values in the data.
+
+```{r}
+glass_df <- Glass #We'll make a copy to make edits without changing the original dataframe
+index <- sapply(glass_df, is.factor) #find any columns that are factors
+glass_df[index] <- lapply(glass_df[index], function(x) as.numeric(as.character(x))) #convert factors to numerics
+plot_missing(glass_df)
+```
+
+From what we can observe below, it seems there are three predictor variables that follow a close to normal distribution, and these are "Al", "Na" and "Si".
+
+```{r}
+plot_histogram(glass_df)
+plot_density(glass_df)
+```
+
+Additionally, from the correlation plot below we can see that a few of the variables have strong correlations to the glass type. The variables with strong positive correlations include "Ba", "Al" and "Na", while there is one with a strong negative correlation "Mg". We can also observe there are some very strong correlations between the predictor variables themselves such as "RI" and "Ca", which have a correlation of 0.81.
+
+```{r}
+plot_correlation(glass_df)
+```
+
+**b.** Do there appear to be any outliers in the data? Are any predictors skewed?
+
+We can see there are outliers throughout the data, but from the skewness tests below we are able to identify that the variables with the greatest degree of skewness include "Ca", "K" and "Ba".
+
+```{r}
+boxplot(glass_df$RI)
+skewness(glass_df$RI)
+```
+
+```{r}
+boxplot(glass_df$Na)
+skewness(glass_df$Na)
+```
+
+```{r}
+boxplot(glass_df$Mg)
+skewness(glass_df$Mg)
+```
+
+```{r}
+boxplot(glass_df$Al)
+skewness(glass_df$Al)
+```
+
+```{r}
+boxplot(glass_df$Si)
+skewness(glass_df$Si)
+```
+
+```{r}
+boxplot(glass_df$K)
+skewness(glass_df$K)
+```
+
+```{r}
+boxplot(glass_df$Ca)
+skewness(glass_df$Ca)
+```
+
+```{r}
+boxplot(glass_df$Ba)
+skewness(glass_df$Ba)
+```
+
+```{r}
+boxplot(glass_df$Fe)
+skewness(glass_df$Fe)
+```
+
+```{r}
+boxplot(glass_df$Type)
+skewness(glass_df$Type)
+```
+
+**c.**Are there any relevant transformations of one or more predictors that might improve the classification model?
+
+It seems that the predictors with the highest skewness are "Ca", "K" and "Ba". I will apply a Box-Cox transformation to "Ca", but will not be able to do the same for the other two variables as they contain "0"s in the data and the function will not work. I will use a log transformation instead on these two variables and compare results to the above histograms.
+
+```{r}
+boxcox(lm(glass_df$Ca ~ 1))
+hist(glass_df$Ca^(-1))
+```
+
+```{r}
+hist(log(glass_df$K))
+```
+
+```{r}
+hist(log(glass_df$Ba))
+```
+
+As we can see above, the transformations helped bring these variables closer to normal distribution.
+
+
+### Exercise 3.2
+
+The soybean data can also be found at the UC Irvine Machine Learning Repository. Data were collected to predict disease in 683 soybeans. The 35 predictors are mostly categorical and include information on the environmental conditions (e.g., temperature, precipitation) and plant conditions (e.g., left spots, mold growth). The outcome labels consist of 19 distinct classes. The data can be loaded via:
+
+```{r}
+data(Soybean)
+str(Soybean)
+## See ?Soybean for details
+```
+
+**a.** Investigate the frequency distributions for the categorical predictors. Are any of the distributions degenerate in the ways discussed earlier in this chapter?
+
+By using the "nearZeroVar" function, we are able to identify the variables with near to zero variance, meaning they have a single value for most samples and hence their distributions are degenerate.
+
+```{r}
+bean_df <- Soybean #We'll make a copy to make edits without changing the original dataframe
+
+nearZeroVar(bean_df)
+```
+
+```{r}
+colnames(bean_df)[19]
+colnames(bean_df)[26]
+colnames(bean_df)[28]
+```
+
+```{r}
+bean_df %>% 
+  group_by(bean_df$leaf.mild) %>%
+  summarise(freq=n()) %>%
+  mutate(rel.freq=freq/sum(freq)) %>%
+  arrange(-freq)
+```
+
+```{r}
+bean_df %>% 
+  group_by(bean_df$mycelium) %>%
+  summarise(freq=n()) %>%
+  mutate(rel.freq=freq/sum(freq)) %>%
+  arrange(-freq)
+```
+
+```{r}
+bean_df %>% 
+  group_by(bean_df$sclerotia) %>%
+  summarise(freq=n()) %>%
+  mutate(rel.freq=freq/sum(freq)) %>%
+  arrange(-freq)
+```
+
+We can conclude that the following variables have distributions that are degenerate: "leaf.mild", "mycelium" and "sclerotia".
+
+
+**b.** Roughly 18% of the data are missing. Are there particular predictors that are more likely to be missing? Is the pattern of missing data related to the classes?
+
+We can observe below that the predictors more likely to have missing data are "hail", "sever", "seed.tmt" and "lodging" among others. And yes, there seems to be a pattern observed on the table below. The Classes associated with the missing data seem to be "phytophthora-rot", "diaporthe-pod-&-stem-blight", "cyst-nematode", "2-4-d-injury" and "herbicide-injury". Perhaps the data gathering process was compromised for this Classes.
+
+```{r}
+plot_missing(bean_df)
+```
+
+```{r}
+ref <- dplyr::select(bean_df, Class, hail, sever, seed.tmt, lodging, germ, leaf.mild, fruiting.bodies)
+DT <- data.table(ref)
+DT[, lapply(.SD, function(x) sum(is.na(x))) , by = list(Class)]
+```
+
+
+**c.** Develop a strategy for handling missing data, either by eliminating predictors or imputation.
+
+It seems that the Class with the highest number of missing values is "phytophthora-rot", thus If we were to eliminate this Class altogether, this could cut the percentage of missing values for each predictor by half as observed in the table and graph below:
+
+```{r}
+miss_class <- bean_df %>%
+  group_by(Class) %>%
+  summarise_all(funs(sum(is.na(.)))) %>%
+  mutate(tot_na = dplyr::select(.,date:roots) %>% rowSums())
+
+miss_class %>% dplyr::select('Class','tot_na') %>% arrange(-tot_na)
+
+```
+
+```{r}
+bean_df2 <- Soybean %>%
+  filter(Class !="phytophthora-rot")
+
+plot_missing(bean_df2)
+```
+
+As a rule of thumb the first option is to try to recover any missing data, and in this
+case it is related to a few number of classes, thus it could be possible. If
+recovering the missing data is not an option, it could be worth trying the MICE
+imputation, although with such a small dataset it is unlikely to improve the
+predictions through imputation. We would also need a lot clearer understanding of each
+of the predictors we would attempt to impute.
+
+
+
+
+     
