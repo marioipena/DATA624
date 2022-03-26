@@ -1,0 +1,633 @@
+---
+title: "DATA 624 Homework 6"
+author: "Mario Pena"
+date: "March 27, 2022"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(fpp3)
+library(tidyverse)
+library(gridExtra)
+```
+
+### Exercise 9.11.1
+
+Figure 9.32 shows the ACFs for 36 random numbers, 360 random numbers and 1,000 random numbers.
+
+**a.** Explain the differences among these figures. Do they all indicate that the data are white noise?
+
+One of the main differences that we can clearly observe is that each plot is made up of different sizes of random numbers (36, 360 and 1,000). And we can say that they all indicate that the data are white noise since all of the autocorrelation coefficients lie within the limits, close to zero.
+
+![Figure 9.32: Left: ACF for a white noise series of 36 numbers. Middle: ACF for a white noise series of 360 numbers. Right: ACF for a white noise series of 1,000 numbers.](/Users/mpena/Desktop/Mario/DATA624/HW6/wnacfplus-1.png)
+
+**b.** Why are the critical values at different distances from the mean of zero? Why are the autocorrelations different in each figure when they each refer to white noise?
+
+Critical values are at different distances from the mean zero because white noise data is expected to be within the bounds +-2/(sqrt(T) and in this case as T is getting larger (36, 360, 1000) the bounds or limits are getting smaller as well as the critical values.
+
+### Exercise 9.11.2
+
+A classic example of a non-stationary series are stock prices. Plot the daily closing prices for Amazon stock (contained in `gafa_stock`), along with the ACF and PACF. Explain how each plot shows that the series is non-stationary and should be differenced.
+
+```{r}
+gafa_stock %>%
+  distinct(Symbol)
+```
+
+As observed in our plots below, we clearly see a trend in the data and this is also evident in the ACF plot, we see a slow decrease as the lags increase suggesting a trend, thus the series is non-stationary. Additionally, the large initial spike in the PACF plot also indicates that these data is not stationary, therefore it should be differenced to make it stationary.
+
+```{r}
+amazon <- gafa_stock %>%
+  filter(Symbol == "AMZN")
+
+p1_a <- amazon %>% 
+  autoplot(Close) +
+  labs(title="Daily Closing Stock Price (Amazon) ")
+
+p2_a <- amazon %>%
+  ACF(Close) %>%
+  autoplot() + labs(title="Correlation of Daily Closing Stock Price (Amazon) ")
+
+p3_a <- amazon %>%
+  PACF(Close) %>%
+  autoplot() + labs(title="Partial Autocorrelation Daily Closing Stock Price (Amazon) ")
+
+grid.arrange(p1_a, p2_a, p3_a, nrow = 2)
+```
+
+### Exercise 9.11.3
+
+For the following series, find an appropriate Box-Cox transformation and order of differencing in order to obtain stationary data.
+
+**a.** Turkish GDP from `global_economy`.
+
+As evident in the plots below, the Turkish GDP data is non-stationary. We'll make the appropriate Box-Cox transformations and order of differencing in order to obtain stationary data.
+
+```{r}
+turk <- global_economy %>%
+  filter(Country == "Turkey")
+
+p1_t <- turk %>% 
+  autoplot(GDP) +
+  labs(title="Turkey GDP")
+
+p2_t <- turk %>%
+  ACF(GDP) %>%
+  autoplot() + labs(title="Correlation of Turkey GDP ")
+
+p3_t <- turk %>%
+  PACF(GDP) %>%
+  autoplot() + labs(title="Partial Autocorrelation of Turkey GDP ")
+
+grid.arrange(p1_t, p2_t, p3_t, nrow = 2)
+```
+
+The `guerrero` feature suggests a transformation with lamda 0.16.
+
+```{r}
+lambda_t <- turk %>%
+  features(GDP,features=guerrero) %>%
+  pull(lambda_guerrero)
+lambda_t
+```
+
+After the transformation, we determine that the appropriate order of differencing is 1.
+
+```{r}
+turk %>%
+  features(box_cox(GDP, lambda_t), unitroot_ndiffs)
+```
+
+As observed below, all critical values are within the bounds in the ACF and PACF plots, we were able to make the Turkish GDP stationary after finding an appropriate Box-Cox transformation and 1st order of differencing.
+
+```{r}
+p4_t <- turk %>% 
+  autoplot(difference(box_cox(GDP, lambda_t), 1)) +
+  labs(title="Turkey GDP After Transformation")
+
+p5_t <- turk %>%
+  ACF(difference(box_cox(GDP, lambda_t), 1)) %>%
+  autoplot() + labs(title="Correlation of Turkey GDP After Transformation ")
+
+p6_t <- turk %>%
+  PACF(difference(box_cox(GDP, lambda_t), 1)) %>%
+  autoplot() + labs(title="Partial Autocorrelation of Turkey GDP After Transformation ")
+
+grid.arrange(p4_t, p5_t, p6_t, nrow = 2)
+```
+
+**b.** Accommodation takings in the state of Tasmania from `aus_accommodation`.
+
+As observed below, we may need to apply `unitroot_nsdiffs()` to the quarterly Tasmanian takings data in order to determine if we need any seasonal differencing.
+
+```{r}
+tas <- aus_accommodation %>%
+  filter(State == "Tasmania")
+
+p1_ta <- tas %>% 
+  autoplot(Takings) +
+  labs(title="Accomodation Takings in Tasmania")
+
+p2_ta <- tas %>%
+  ACF(Takings) %>%
+  autoplot() + labs(title="Correlation of Takings in Tasmania ")
+
+p3_ta <- tas %>%
+  PACF(Takings) %>%
+  autoplot() + labs(title="Partial Autocorrelation of Takings in Tasmania ")
+
+grid.arrange(p1_ta, p2_ta, p3_ta, nrow = 2)
+```
+
+The `guerrero` feature suggests a transformation with lamda -0.05.
+
+```{r}
+lambda_ta <- tas %>%
+  features(Takings,features=guerrero) %>%
+  pull(lambda_guerrero)
+lambda_ta
+```
+
+After the transformation, we determine that the data needs 1 order of seasonal differencing.
+
+```{r}
+tas %>%
+  features(box_cox(Takings, lambda_ta), unitroot_nsdiffs)
+```
+
+And after applying the `unitroot_ndiffs()` we can see that no additional differencing is needed.
+
+```{r}
+tas %>%
+  features(difference(box_cox(Takings, lambda_ta), 4), unitroot_ndiffs)
+```
+
+After applying the necessary transformations we can see on the ACF plot that about 3 autocorrelations are outside the 95% limit and 2 in the PACF plots. This is indicative that the transformations have made the data stationary.
+
+```{r}
+p4_ta <- tas %>%
+  autoplot(difference(box_cox(Takings, lambda_ta), 4)) +
+  labs(title="Accomodation Takings in Tasmania After Transformation")
+
+p5_ta <- tas %>%
+  ACF(difference(box_cox(Takings, lambda_ta), 4)) %>%
+  autoplot() + labs(title="Correlation of Takings After Tranformation ")
+
+p6_ta <- tas %>%
+  PACF(difference(box_cox(Takings, lambda_ta), 4)) %>%
+  autoplot() + labs(title="Partial Autocorrelation of Takings After Transformation ")
+
+grid.arrange(p4_ta, p5_ta, p6_ta, nrow = 2)
+```
+
+**c.** Monthly sales from `souvenirs`.
+
+As observed below, we may need to apply `unitroot_nsdiffs()` to the monthly sales data in order to determine if we need any seasonal differencing.
+
+```{r}
+p1_s <- souvenirs %>%
+  autoplot(Sales) +
+  labs(title="Monthly Sales")
+
+p2_s <- souvenirs %>%
+  ACF(Sales) %>%
+  autoplot() + labs(title="Correlation of Monthly Sales ")
+
+p3_s <- souvenirs %>%
+  PACF(Sales) %>%
+  autoplot() + labs(title="Partial Autocorrelation of Monthly Sales ")
+
+grid.arrange(p1_s, p2_s, p3_s, nrow = 2)
+```
+
+The `guerrero` feature suggests a transformation with lamda 0.002.
+
+```{r}
+lambda_s <- souvenirs %>%
+  features(Sales,features=guerrero) %>%
+  pull(lambda_guerrero)
+lambda_s
+```
+
+After the transformation, we determine that the data needs 1 order of seasonal differencing.
+
+```{r}
+souvenirs %>%
+  features(box_cox(Sales, lambda_s), unitroot_nsdiffs)
+```
+
+And after applying the `unitroot_ndiffs()` we can see that no additional differencing is needed.
+
+```{r}
+souvenirs %>%
+  features(difference(box_cox(Sales, lambda_s), 12), unitroot_ndiffs)
+```
+
+After applying the necessary transformations we can see on the ACF and PACF plots that only two autocorrelations are outside the 95% limits, which suggests we've made the data stationary.
+
+```{r}
+p4_s <- souvenirs %>%
+  autoplot(difference(box_cox(Sales, lambda_s), 12)) +
+  labs(title="Monthly Sales After Transformation")
+
+p5_s <- souvenirs %>%
+  ACF(difference(box_cox(Sales, lambda_s), 12)) %>%
+  autoplot() + labs(title="Correlation of Monthly Sales After Tranformation ")
+
+p6_s <- souvenirs %>%
+  PACF(difference(box_cox(Sales, lambda_s), 12)) %>%
+  autoplot() + labs(title="Partial Autocorrelation of Monthly Sales After Transformation ")
+
+grid.arrange(p4_s, p5_s, p6_s, nrow = 2)
+```
+
+
+
+### Exercise 9.11.5
+
+For your retail data (from Exercise 8 in Section 2.10), find the appropriate order of differencing (after transformation if necessary) to obtain stationary data.
+
+```{r}
+set.seed(123)
+myseries <- aus_retail %>%
+  filter(`Series ID` == sample(aus_retail$`Series ID`,1))
+```
+
+As observed below, we may need to apply `unitroot_nsdiffs()` to the monthly turnover data in order to determine if we need any seasonal differencing.
+
+```{r}
+p1_m <- myseries %>%
+  autoplot(Turnover) +
+  labs(title="Monthly Turnover")
+
+p2_m <- myseries %>%
+  ACF(Turnover) %>%
+  autoplot() + labs(title="Correlation of Monthly Turnover ")
+
+p3_m <- myseries %>%
+  PACF(Turnover) %>%
+  autoplot() + labs(title="Partial Autocorrelation of Monthly Turnover ")
+
+grid.arrange(p1_m, p2_m, p3_m, nrow = 2)
+```
+
+The `guerrero` feature suggests a transformation with lamda 0.22.
+
+```{r}
+lambda_m <- myseries %>%
+  features(Turnover,features=guerrero) %>%
+  pull(lambda_guerrero)
+lambda_m
+```
+
+After the transformation, we determine that the data needs 1 order of seasonal differencing.
+
+```{r}
+myseries %>%
+  features(box_cox(Turnover, lambda_m), unitroot_nsdiffs)
+```
+
+And after applying the `unitroot_ndiffs()` we can see that no additional differencing is needed.
+
+```{r}
+myseries %>%
+  features(difference(box_cox(Turnover, lambda_m), 12), unitroot_ndiffs)
+```
+
+After applying the necessary transformations we can see on the ACF and PACF plots that some changes happend from the original data. However, it does not seem that we achieved to make the data stationary.
+
+```{r}
+p4_m <- myseries %>%
+  autoplot(difference(box_cox(Turnover, lambda_m), 12)) +
+  labs(title="Monthly Turnover After Transformation")
+
+p5_m <- myseries %>%
+  ACF(difference(box_cox(Turnover, lambda_m), 12)) %>%
+  autoplot() + labs(title="Correlation of Monthly Turnover After Tranformation ")
+
+p6_m <- myseries %>%
+  PACF(difference(box_cox(Turnover, lambda_m), 12)) %>%
+  autoplot() + labs(title="Partial Autocorrelation of Monthly Turnover After Transformation ")
+
+grid.arrange(p4_m, p5_m, p6_m, nrow = 2)
+```
+
+### Exercise 9.11.6
+
+Simulate and plot some data from simple ARIMA models.
+
+**a.** Use the following R code to generate data from an AR(1) model with  
+ϕ1=0.6 and σ2=1. The process starts with  y1=0.
+
+```{r}
+y <- numeric(100)
+e <- rnorm(100)
+for(i in 2:100)
+  y[i] <- 0.6*y[i-1] + e[i]
+sim <- tsibble(idx = seq_len(100), y = y, index = idx)
+```
+
+**b.** Produce a time plot for the series. How does the plot change as you change  
+ϕ1?
+
+We'll create additional variables y2 and y3 to visualize what happens to the data as we change ϕ1.
+
+```{r}
+sim %>% autoplot(y)
+```
+
+```{r}
+set.seed(123)
+y2 <- numeric(100)
+y3 <- numeric(100)
+e2 <- rnorm(100)
+e3 <- rnorm(100)
+
+for(i in 2:100){
+    y2[i] <- 0.1*y2[i-1] + e2[i]
+    y3[i] <- 0.9*y3[i-1] + e3[i]
+    
+}
+
+sim <- tsibble(idx = seq_len(100), y = y, y2 = y2, y3 = y3, index = idx)
+
+plot1 <- sim %>% autoplot(y2) + labs( title = "Phi = 0.1")
+plot2 <- sim %>% autoplot(y) + labs( title = "Phi = 0.6")
+plot3 <- sim %>% autoplot(y3) + labs( title = "Phi = 0.9")
+
+grid.arrange(plot1, plot2, plot3, nrow = 2)
+```
+
+As observed above, as the ϕ1 decreases or approaches 0, yt starts to be equivalent to white noise.
+
+**c.** Write your own code to generate data from an MA(1) model with θ1=0.6 and σ2=1.
+
+```{r}
+set.seed(123)
+y4 <- numeric(100)
+e4 <- rnorm(100)
+
+for(i in 2:100)
+  y4[i] <- 0.6*e4[i-1] + e4[i]
+  
+sim2 <- tsibble(idx = seq_len(100), y4 = y4, index = idx)
+```
+
+**d.** Produce a time plot for the series. How does the plot change as you change θ1?
+
+```{r}
+set.seed(123)
+set.seed(123)
+y5 <- numeric(100)
+y6 <- numeric(100)
+e5 <- rnorm(100)
+e6 <- rnorm(100)
+
+for(i in 2:100){
+  y5[i] <- 0.1*e5[i-1] + e5[i]
+  y6[i] <- 0.9*e6[i-1] + e6[i]
+}
+sim2 <- tsibble(idx = seq_len(100), y4 = y4, y5 = y5, y6 = y6, index = idx)
+
+plot4 <- sim2 %>% autoplot(y5) + labs( title = "Theta = 0.1")
+plot5 <- sim2 %>% autoplot(y4) + labs( title = "Theta = 0.6")
+plot6 <- sim2 %>% autoplot(y6) + labs( title = "Theta = 0.9")
+
+grid.arrange(plot4, plot5, plot6, nrow = 2)
+```
+
+In this case as Theta decreases the most recent observations have higher weight than observations from the more distant past. Additionally, only the scale in the series changes, not the patterns.
+
+**e.** Generate data from an ARMA(1,1) model with  ϕ1=0.6, θ1=0.6 and σ2=1.
+
+```{r}
+set.seed(123)
+y7 <- (numeric(100))
+e7 <- rnorm(100)
+
+for(i in 2:100)
+  y7[i] <- 0.6*y7[i-1] + 0.6*e7[i-1] + e7[i] 
+
+sim3 <- tsibble(idx = seq_len(100), y7 = y7, index = idx)
+```
+
+**f.** Generate data from an AR(2) model with ϕ1=-0.8, ϕ2=0.3 and σ2=1. (Note that these parameters will give a non-stationary series.)
+
+```{r}
+set.seed(123)
+y8 <- (numeric(100))
+e8 <- rnorm(100)
+
+for(i in 3:100)
+  y8[i] <- -0.8*y8[i-1] + 0.3*y8[i-2] + e8[i]
+
+sim4 <- tsibble(idx = seq_len(100), y8 = y8, index = idx)
+```
+
+**g.** Graph the latter two series and compare them.
+
+```{r}
+plot7 <- sim3 %>% autoplot(y7) + labs( title = "ARMA(1,1) Phi = 0.6 and Theta = 0.6")
+plot8 <- sim4 %>% autoplot(y8) + labs( title = "AR(2) Phi1 = -0.8 and Phi2 = 0.3")
+
+grid.arrange(plot7, plot8, nrow = 2)
+```
+
+The ARMA(1,1) model seems to be approaching stationarity. Perhaps by decreasing Phi we could achieve this. The AR(2) model has negative coefficient of -.8 which will cause the first term to alternate between a positive and negative value. We can also observe that the AR(2) model shows larger values as time progresses due to the Phi2 term.
+
+### Exercise 9.11.7
+
+Consider `aus_airpassengers`, the total number of passengers (in millions) from Australian air carriers for the period 1970-2011.
+
+```{r}
+autoplot(aus_airpassengers)
+```
+
+**a.** Use `ARIMA()` to find an appropriate ARIMA model. What model was selected. Check that the residuals look like white noise. Plot forecasts for the next 10 periods.
+
+The model that was selected for the data is ARIMA(0,2,1). Additionally, it seems that the residuals on the time plot show a slight increase in variability from around year 1989 and on. We can also observe that the residuals look like white noise on the ACF plot.
+
+```{r}
+fit <- aus_airpassengers %>%
+  model(ARIMA(Passengers))
+
+report(fit)
+```
+
+```{r}
+fit %>% gg_tsresiduals()
+```
+
+```{r}
+fit %>% forecast(h=10) %>%
+  autoplot(aus_airpassengers)
+```
+
+**b.** Write the model in terms of the backshift operator.
+
+ARIMA(0,2,1): ((1−B)^2)Yt=(1+(Θ1)B)ϵt
+
+**c.** Plot forecasts from an ARIMA(0,1,0) model with drift and compare these to part a.
+
+```{r}
+fit2 <- aus_airpassengers %>%
+  model(ARIMA(Passengers ~ 1 + pdq(0,1,0)))
+
+report(fit2)
+```
+
+```{r}
+fit2 %>% forecast(h=10) %>%
+  autoplot(aus_airpassengers)
+```
+
+The forecasts look very similar, upward trending.
+
+**d.** Plot forecasts from an ARIMA(2,1,2) model with drift and compare these to parts a and c. Remove the constant and see what happens.
+
+```{r}
+fit3 <- aus_airpassengers %>%
+  model(ARIMA(Passengers ~ 1 + pdq(2,1,2)))
+
+report(fit3)
+```
+
+```{r}
+fit3 %>% forecast(h=10) %>%
+  autoplot(aus_airpassengers)
+```
+
+The forecasts with this new ARIMA(2,1,2) model keeps looking very similar to those in part a and c.
+
+```{r}
+fit4 <- aus_airpassengers %>%
+  model(ARIMA(Passengers ~ 0 + pdq(2,1,2)))
+
+report(fit4)
+```
+
+When we remove the constant, we get an error (non-stationary AR part from CSS) and the model is NULL.
+
+**e.** Plot forecasts from an ARIMA(0,2,1) model with a constant. What happens?
+
+```{r}
+fit5 <- aus_airpassengers %>%
+  model(ARIMA(Passengers ~ 1 + pdq(0,2,1)))
+
+report(fit5)
+```
+
+```{r}
+fit5 %>% forecast(h=10) %>%
+  autoplot(aus_airpassengers)
+```
+
+We get a message from R discouraging us from using a constant as it induces a quadratic or higher order polynomial trend. As it is evident on the graph for the forecasts, we can see that the line has become steeper and forecasts are higher than seen in previous graphs.
+
+### Exercise 9.11.8
+
+For the United States GDP series (from `global_economy`):
+
+As we can see below, the graph of US GDP shows a bit of a curve. There may be a transformation suggested by the `guerrero` feature that could help straighten the line.
+
+```{r}
+us <- global_economy %>%
+  filter(Country == "United States")
+
+autoplot(us)
+```
+
+**a.** if necessary, find a suitable Box-Cox transformation for the data;
+
+The `guerrero` feature suggests a transformation with lamda 0.28. 
+
+```{r}
+lambda_us <- us %>%
+  features(GDP,features=guerrero) %>%
+  pull(lambda_guerrero)
+lambda_us
+```
+
+Below, we can see that the transformation has helped straighten the line.
+
+```{r}
+us %>% autoplot(box_cox(GDP, lambda_us))
+```
+
+**b.** fit a suitable ARIMA model to the transformed data using `ARIMA()`;
+
+The `ARIMA()` function suggests an ARIMA(1,1,0) model with drift.
+
+```{r}
+fit_us <- us %>%
+  model(ARIMA(box_cox(GDP, lambda_us)))
+
+report(fit_us)
+```
+
+**c.** try some other plausible models by experimenting with the orders chosen;
+
+```{r}
+
+fit_others <- us %>%
+  model(
+    "ARIMA(2,1,2)" = ARIMA(box_cox(GDP, lambda_us) ~ 1 + pdq(2,1,2)),
+    "ARIMA(0,1,0)" = ARIMA(box_cox(GDP, lambda_us) ~ 1 + pdq(0,1,0)),
+    "ARIMA(1,1,0)" = ARIMA(box_cox(GDP, lambda_us) ~ 1 + pdq(1,1,0))       
+      )
+```
+
+As observed below, the model with the lowest AIC is the ARIMA(1,1,0) with drift, as it was previously suggested by the `ARIMA()` function.
+
+```{r}
+glance(fit_others) %>%
+  arrange (AIC) %>%
+  select(.model:BIC)
+```
+
+**d.** choose what you think is the best model and check the residual diagnostics;
+
+It looks like the residuals are distributed evenly on the time plot. We can also observe that the residuals look like white noise on the ACF plot.
+
+```{r}
+fit_us %>% gg_tsresiduals()
+```
+
+**e.** produce forecasts of your fitted model. Do the forecasts look reasonable?
+
+The forecasts look reasonable as they are following the trend contained within the data.
+
+```{r}
+fit_us %>% 
+  forecast(h=5) %>%
+  autoplot(us)
+```
+
+**f.** compare the results with what you would obtain using `ETS()` (with no transformation).
+
+From the graph below, we can observe that the prediction intervals for the `ETS()` model are a lot wider than for the `ARIMA()` model. And if we look at the model report, we can also realize that the AIC is a lot larger for the `ETS()` model, 3190 compared to 656 from our best `ARIMA()` model.
+
+```{r}
+fit_ets <- us %>%
+  model(ETS(GDP))
+
+fit_ets %>%
+  forecast(h=5) %>%
+  autoplot(us)
+```
+
+```{r}
+report(fit_ets)
+```
+
