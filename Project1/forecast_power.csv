@@ -1,0 +1,13 @@
+"",".model","Month","KWH",".mean"
+"1","ARIMA(box_cox(KWH, lambdap))",2014 Jan,t(N(4.6, 1.3e-05)),10303342.7445128
+"2","ARIMA(box_cox(KWH, lambdap))",2014 Feb,t(N(4.6, 1.4e-05)),8738511.20949734
+"3","ARIMA(box_cox(KWH, lambdap))",2014 Mar,t(N(4.6, 1.4e-05)),6686776.51696304
+"4","ARIMA(box_cox(KWH, lambdap))",2014 Apr,t(N(4.6, 1.4e-05)),5980443.97030879
+"5","ARIMA(box_cox(KWH, lambdap))",2014 May,t(N(4.6, 1.4e-05)),5941526.30261393
+"6","ARIMA(box_cox(KWH, lambdap))",2014 Jun,t(N(4.6, 1.4e-05)),8307439.76554207
+"7","ARIMA(box_cox(KWH, lambdap))",2014 Jul,t(N(4.6, 1.4e-05)),9596883.44399184
+"8","ARIMA(box_cox(KWH, lambdap))",2014 Aug,t(N(4.6, 1.4e-05)),10159451.0439806
+"9","ARIMA(box_cox(KWH, lambdap))",2014 Sep,t(N(4.6, 1.4e-05)),8514191.53650978
+"10","ARIMA(box_cox(KWH, lambdap))",2014 Oct,t(N(4.6, 1.4e-05)),5854051.54943055
+"11","ARIMA(box_cox(KWH, lambdap))",2014 Nov,t(N(4.6, 1.4e-05)),6131079.73949065
+"12","ARIMA(box_cox(KWH, lambdap))",2014 Dec,t(N(4.6, 1.4e-05)),8249400.52930862

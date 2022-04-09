@@ -1,0 +1,559 @@
+---
+title: "DATA 624 Project 1"
+author: "Mario Pena"
+date: "April 3, 2022"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r warning=FALSE}
+library(readxl)
+library(fpp3)
+library(DataExplorer)
+library(tidyverse)
+library(gridExtra)
+```
+
+### Objective
+
+Part A – ATM Forecast, ATM624Data.xlsx
+ 
+In part A, I want you to forecast how much cash is taken out of 4 different ATM machines for May 2010.  The data is given in a single file. The variable ‘Cash’ is provided in hundreds of dollars, other than that it is straight forward.   I am being somewhat ambiguous on purpose to make this have a little more business feeling.  Explain and demonstrate your process, techniques used and not used, and your actual forecast.  I am giving you data via an excel file, please provide your written report on your findings, visuals, discussion and your R code via an RPubs link along with the actual .rmd file.  Also please submit the forecast which you will put in an Excel readable file.
+ 
+Part B – Forecasting Power, ResidentialCustomerForecastLoad-624.xlsx
+ 
+Part B consists of a simple dataset of residential power usage for January 1998 until December 2013. Your assignment is to model these data and a monthly forecast for 2014. The data is given in a single file.  The variable ‘KWH’ is power consumption in Kilowatt hours, the rest is straight forward. Add this to your existing files above.
+
+
+## PART A
+
+
+### Data Exploration
+
+We will first load the data, which I have saved in a local folder, and explore it.
+
+```{r warning=FALSE}
+data <- read_excel("ATM624Data.xlsx", col_names = T, col_types = c('date', 'guess', 'guess'))
+```
+
+The data contain the variables "DATE, ATM and Cash".
+
+```{r}
+head(data)
+```
+
+As we can observe in the table above, the variable "DATE" is of data type "POSIXct". We will have to convert it to date in order to work with the data.
+
+```{r}
+summary(data)
+```
+
+We can also see that the max value under the "Cash" variable is 10919.8. Since the number is in hundreds of dollars, when multiplying this by 100 we get 1,091,980, and it is quite unlikely that any ATM machine would be able to dispense this kind of cash. This is most likely an error and we will address it accordingly.
+
+```{r}
+plot_missing(data)
+```
+
+There are a few missing values for "ATM" but I believe these were left blank on purpose in order to enter the predictions later on for the month of May. Additionally, there are also a few missing values from "Cash" that we may need to address.
+
+### Data Preparation
+
+We will create a separate data set in order to maintain the original data and make all the necessary transformations there. First we'll transform the "DATE" variables into its corresponding data type date. We will also make "Cash" an integer as we know that ATMs do not dispense cents.
+
+```{r}
+atm <- data %>%
+  mutate(DATE = as_date(DATE), Cash = as.integer(Cash))
+str(atm)
+```
+
+Since we are looking at 4 separate ATMs and the data does not provide their location, they may have varying amounts of cash withdrawn at varying different days. We will work with each ATM separately and each will have its own forecast for the month of May in 2010.
+
+```{r}
+atm1 <- atm %>%
+  filter(ATM == "ATM1") %>%
+  as_tsibble(index = DATE)
+
+
+autoplot(atm1) +
+  labs(title="ATM1", subtitle="Cash withdrawals per day", y="Hundreds USD")
+```
+
+```{r}
+atm2 <- atm %>%
+  filter(ATM == "ATM2") %>%
+  as_tsibble(index = DATE)
+
+
+autoplot(atm2) +
+  labs(title="ATM2", subtitle="Cash withdrawals per day", y="Hundreds USD")
+```
+
+```{r}
+atm3 <- atm %>%
+  filter(ATM == "ATM3") %>%
+  as_tsibble(index = DATE)
+
+
+autoplot(atm3) +
+  labs(title="ATM3", subtitle="Cash withdrawals per day", y="Hundreds USD")
+```
+
+```{r}
+atm4 <- atm %>%
+  filter(ATM == "ATM4") %>%
+  as_tsibble(index = DATE)
+
+
+autoplot(atm4) +
+  labs(title="ATM4", subtitle="Cash withdrawals per day", y="Hundreds USD")
+```
+
+Based on our plots above, we can observe that "ATM1" and "ATM2" are time series that have constant variability, with no apparent trend and potential seasonality, but we will explore these more in detail with decompositions. However, "ATM3"seems to only have withdrawals for the last few days in the data. Lastly, "ATM4" has a clear outlier, which is the one we identified previously with the `summary()` function.
+
+```{r}
+which(atm4$Cash == 10919)
+```
+
+The outlier is found on row 285 of the 4th ATM time series. We will use the average to impute this number as it is obvious that this is an error.
+
+The time series looks more like "ATM1" and "ATM2" now:
+
+```{r}
+atm4[285,3] <- round(mean(atm4$Cash),0)
+
+autoplot(atm4) +
+  labs(title="ATM4", subtitle="Cash withdrawals per day", y="Hundreds USD")
+```
+
+We also seem to have a few missing values on the "Cash" column for "ATM1" and "ATM2":
+
+```{r}
+sum(is.na(atm1$Cash))
+sum(is.na(atm2$Cash))
+sum(is.na(atm3$Cash))
+sum(is.na(atm4$Cash))
+```
+
+The missing values are found on the rows below for each respective ATM
+
+```{r}
+which(is.na(atm1$Cash))
+which(is.na(atm2$Cash))
+```
+
+```{r}
+hist(atm1$Cash)
+hist(atm2$Cash)
+```
+
+Since I don't see an evident skewness on the distribution of "Cash" for either ATM above, I will use the averages to impute these values:
+
+```{r}
+atm1[44,3] <- round(mean(atm1$Cash, na.rm=TRUE),0)
+atm1[47,3] <- round(mean(atm1$Cash, na.rm=TRUE),0)
+atm1[53,3] <- round(mean(atm1$Cash, na.rm=TRUE),0)
+atm2[49,3] <- round(mean(atm2$Cash, na.rm=TRUE),0)
+atm2[55,3] <- round(mean(atm2$Cash, na.rm=TRUE),0)
+```
+
+Additionally, we can look for a Box-Cox transformation for each series to help make them a little simpler:
+
+```{r}
+lambda1 <- atm1%>%
+  features(Cash,features = guerrero)%>%
+  pull(lambda_guerrero)
+
+plot_trans1 <- atm1 %>%
+  autoplot(box_cox(Cash, lambda1)) +
+  labs(title="ATM1 TRANSFORMED", subtitle="Cash withdrawals per day", y="USD")
+
+lambda2 <- atm2%>%
+  features(Cash,features = guerrero)%>%
+  pull(lambda_guerrero)
+
+plot_trans2 <- atm2 %>%
+  autoplot(box_cox(Cash, lambda2)) +
+  labs(title="ATM2 TRANSFORMED", subtitle="Cash withdrawals per day", y="USD")
+
+lambda3 <- atm3%>%
+  features(Cash,features = guerrero)%>%
+  pull(lambda_guerrero)
+
+plot_trans3 <- atm3 %>%
+  autoplot(box_cox(Cash, lambda3)) +
+  labs(title="ATM3 TRANSFORMED", subtitle="Cash withdrawals per day", y="USD")
+
+lambda4 <- atm4%>%
+  features(Cash,features = guerrero)%>%
+  pull(lambda_guerrero)
+
+plot_trans4 <- atm4 %>%
+  autoplot(box_cox(Cash, lambda4)) +
+  labs(title="ATM4 TRANSFORMED", subtitle="Cash withdrawals per day", y="USD")
+
+grid.arrange(plot_trans1, plot_trans2, plot_trans3, plot_trans4, nrow = 2)
+```
+
+The transformations helped scale down the time series of all ATMs.
+
+### Build Model
+
+Let's now look at the decomposition of each series to see if we have strong seasonality and perhaps differencing is required in the model. Since the magnitud of the seasonal components do not seem to change with time, we can say the series are additive. 
+
+```{r}
+atm1%>%
+  model(classical_decomposition(box_cox(Cash, lambda1), type="additive")) %>%
+  components () %>%
+  autoplot() + 
+  labs(title="Classical additive decomposition of ATM1")
+```
+
+```{r}
+atm2%>%
+  model(classical_decomposition(box_cox(Cash, lambda2), type="additive")) %>%
+  components () %>%
+  autoplot() + 
+  labs(title="Classical additive decomposition of ATM2")
+```
+
+```{r}
+atm3%>%
+  model(classical_decomposition(box_cox(Cash, lambda3), type="additive")) %>%
+  components () %>%
+  autoplot() + 
+  labs(title="Classical additive decomposition of ATM3")
+```
+
+```{r}
+atm4%>%
+  model(classical_decomposition(box_cox(Cash, lambda4), type="additive")) %>%
+  components () %>%
+  autoplot() + 
+  labs(title="Classical additive decomposition of ATM4")
+```
+
+As evident on the plots above, we see a strong seasonal component for all ATMs. 
+
+```{r}
+plot_acf1 <- atm1 %>%
+  ACF(box_cox(Cash, lambda1)) %>%
+  autoplot() + labs(title="Autocorrelation of Cash ATM1")
+
+plot_acf2 <- atm2 %>%
+  ACF(box_cox(Cash, lambda2)) %>%
+  autoplot() + labs(title="Autocorrelation of Cash ATM2")
+
+plot_acf3 <- atm3 %>%
+  ACF(box_cox(Cash, lambda3)) %>%
+  autoplot() + labs(title="Autocorrelation of Cash ATM3")
+
+plot_acf4 <- atm4 %>%
+  ACF(box_cox(Cash, lambda4)) %>%
+  autoplot() + labs(title="Autocorrelation of Cash ATM4")
+
+grid.arrange(plot_acf1, plot_acf2, plot_acf3, plot_acf4, nrow = 2)
+```
+
+As observed in the ACF plots above, we may need to apply `unitroot_nsdiffs()` to the daily cash withdrawals for each ATM in order to determine if we need any seasonal differencing by week.
+
+```{r}
+atm1 %>%
+  features(box_cox(Cash, lambda1), unitroot_nsdiffs)
+atm2 %>%
+  features(box_cox(Cash, lambda2), unitroot_nsdiffs)
+atm3 %>%
+  features(box_cox(Cash, lambda3), unitroot_nsdiffs)
+atm4 %>%
+  features(box_cox(Cash, lambda4), unitroot_nsdiffs)
+```
+
+As determined by the function above, we need to apply seasonal differencing to "ATM1" and "ATM2". Let's explore further to see if we need any additional differencing:
+
+```{r}
+atm1 %>%
+  features(difference(box_cox(Cash, lambda1), 7), unitroot_ndiffs)
+atm2 %>%
+  features(difference(box_cox(Cash, lambda2), 7), unitroot_ndiffs)
+atm3 %>%
+  features(box_cox(Cash, lambda3), unitroot_ndiffs)
+atm4 %>%
+  features(box_cox(Cash, lambda4), unitroot_ndiffs)
+```
+
+No additional differencing seems to be needed. Let's take a look at the ACF plots aftering differencing "ATM1" and "ATM2".
+
+```{r}
+atm1 %>%
+  ACF(difference(box_cox(Cash, lambda1), 7)) %>%
+  autoplot() + labs(title="Autocorrelation of Cash ATM1")
+atm2 %>%
+  ACF(difference(box_cox(Cash, lambda2), 7)) %>%
+  autoplot() + labs(title="Autocorrelation of Cash ATM2")
+```
+
+Differencing seems to have made the data look closer to white noise.
+
+Considering that these data need differencing, we will use the `ARIMA()` model, which applies differencing within the algorithm, making it simpler to build.
+
+For "ATM3" we will use the naive model, which takes the last observation to forecast. Given there are only three values, this is a sound approach.
+
+```{r}
+atm1_fit <- atm1 %>%
+  model(ARIMA(box_cox(Cash, lambda1)))
+
+report(atm1_fit)
+
+atm1_fit %>%
+  gg_tsresiduals()
+```
+
+```{r}
+atm2_fit <- atm2 %>%
+  model(ARIMA(box_cox(Cash, lambda2)))
+
+report(atm2_fit)
+
+atm2_fit %>%
+  gg_tsresiduals()
+```
+
+```{r}
+atm3_fit <- atm3 %>%
+  model(NAIVE(box_cox(Cash, lambda3)))
+
+report(atm3_fit)
+
+atm3_fit %>%
+  gg_tsresiduals()
+```
+
+```{r}
+atm4_fit <- atm4 %>%
+  model(ARIMA(box_cox(Cash, lambda4)))
+
+report(atm4_fit)
+
+atm4_fit %>%
+  gg_tsresiduals()
+```
+
+All residuals, except for "ATM3", look like they have constant variability, seem to be white noise and have approximately close to normal distributions.
+
+### Forecasts
+
+We will take a look at the forecasts for each ATM:
+
+```{r}
+plot_fc1 <- atm1_fit %>% forecast(h=31) %>%
+  autoplot(atm1)
+
+plot_fc2 <- atm2_fit %>% forecast(h=31) %>%
+  autoplot(atm2)
+
+plot_fc3 <- atm3_fit %>% forecast(h=31) %>%
+  autoplot(atm3)
+
+plot_fc4 <- atm4_fit %>% forecast(h=31) %>%
+  autoplot(atm4)
+
+grid.arrange(plot_fc1, plot_fc2, plot_fc3, plot_fc4, nrow = 2)
+```
+
+All forecasts seem reasonable from a visual perspective.
+
+Finally, we save the forecast of each ATM in its own .csv document:
+
+```{r eval=FALSE}
+forecast_atm1 <- atm1_fit %>% forecast(h=31)
+forecast_atm2 <- atm2_fit %>% forecast(h=31)
+forecast_atm3 <- atm3_fit %>% forecast(h=31)
+forecast_atm4 <- atm4_fit %>% forecast(h=31)
+
+write.csv(forecast_atm1,"forecast_atm1.csv")
+write.csv(forecast_atm2,"forecast_atm2.csv")
+write.csv(forecast_atm3,"forecast_atm3.csv")
+write.csv(forecast_atm4,"forecast_atm4.csv")
+```
+
+
+## PART B
+
+
+### Data Exploration
+
+We will first load the data, which I have saved in a local folder, and explore it.
+
+```{r warning=FALSE}
+data2 <- read_excel("ResidentialCustomerForecastLoad-624.xlsx", col_names = T)
+```
+
+The data contain the variables "CaseSequence, YYYY-MMM and KWH".
+
+```{r}
+head(data2)
+```
+
+As we can observe in the table above, the variable "YYYY-MMM" is of data type "chr". We will have to convert it to "date" in order to work with the data.
+
+```{r}
+summary(data2)
+```
+
+We can also see that the max value under the "KWH" variable is 10655730 and min value is 770523. We'll have to explore the data some more to determine weather either of these values are outliers.
+
+```{r}
+plot_missing(data2)
+```
+
+There are a few missing values for "KWH" that we may need to address.
+
+### Data Preparation
+
+We will create a separate data set in order to maintain the original data and make all the necessary transformations there. First we'll transform our data into a time series, while making the variable "YYYY-MMM" the index.
+
+```{r}
+power <- data2 %>%
+  mutate (Month = yearmonth(`YYYY-MMM`)) %>%
+  select(-`YYYY-MMM`, -CaseSequence) %>%
+  as_tsibble(index = Month)
+
+str(power)
+```
+
+```{r}
+autoplot(power) +
+  labs(title="Power Consumption", subtitle="Residential", y="KWH")
+```
+
+In the graph above, we can clearly see there is an outlier and could potentially be an error.
+
+```{r}
+which(power$KWH == 770523)
+```
+
+This value belong to observation 151. 
+
+Let's also look for the missing value or values previously noted:
+
+```{r}
+which(is.na(power$KWH))
+```
+
+There is one value missing from observation 129.
+
+```{r}
+hist(power$KWH)
+```
+
+Since the distribution of "KWH" is close to normal, I will use the average to substitute these values.
+
+```{r}
+power[129,1] <- round(mean(power$KWH, na.rm=TRUE),0)
+power[151,1] <- round(mean(power$KWH, na.rm=TRUE),0)
+```
+
+Additionally, we can look for a Box-Cox transformation for the series to help simplify it:
+
+```{r}
+lambdap <- power%>%
+  features(KWH,features = guerrero)%>%
+  pull(lambda_guerrero)
+lambdap
+```
+
+The `guerrero()` feature suggests a transformation with lambda -0.21.
+
+```{r}
+power %>%
+  autoplot(box_cox(KWH, lambdap)) +
+  labs(title="Power Consumption Transformed", subtitle="Residential", y="KWH")
+```
+
+The transformation helped scale down the series but did not do much to normalize it.
+
+### Build Model
+
+Let's now look at the decomposition of the series to see if we have strong seasonality and perhaps differencing is required in the model. Since the magnitud of the seasonal components do not seem to change with time, we can say the series are additive. 
+
+```{r}
+power%>%
+  model(classical_decomposition(box_cox(KWH, lambdap), type="additive")) %>%
+  components () %>%
+  autoplot() + 
+  labs(title="Classical additive decomposition of Power Consumption")
+```
+
+As evident on the plots above, we see a strong seasonal component and a slight trend for these data. 
+
+```{r}
+power %>%
+  ACF(box_cox(KWH, lambdap)) %>%
+  autoplot() + labs(title="Autocorrelation of Power Consumption")
+```
+
+We can observe on the ACF plot that we have a lot of autocorrelation. We may need to apply `unitroot_nsdiffs()` to the power consumption in order to determine if we need any seasonal differencing.
+
+```{r}
+power %>%
+  features(box_cox(KWH, lambdap), unitroot_nsdiffs)
+```
+
+As determined by the function above, we need to apply one order of seasonal differencing to the power consumption data. Let's explore further to see if we need any additional differencing:
+
+```{r}
+power %>%
+  features(difference(box_cox(KWH, lambdap), 12), unitroot_ndiffs)
+```
+
+No additional differencing seems to be needed. Let's take a look at the ACF plot aftering differencing the data.
+
+```{r}
+power %>%
+  ACF(difference(box_cox(KWH, lambdap), 12)) %>%
+  autoplot() + labs(title="Autocorrelation of Power Consumption Differenced")
+```
+
+The data looks closer to white noise after differencing.
+
+Considering that these data need seasonal differencing, again we will use the `ARIMA()` model, which applies differencing within the algorithm, making it simpler to build and actually a pretty straight forward choice.
+
+```{r}
+power_fit <- power %>%
+  model(ARIMA(box_cox(KWH, lambdap)))
+
+report(power_fit)
+
+power_fit %>%
+  gg_tsresiduals()
+```
+
+The `ARIMA()` function picks an ARIMA(1,0,0)(2,1,0)[12] with drift. The residuals' distribution looks close to normal, they have constant variability and we can say they are white noise.
+
+### Forecasts
+
+We will take a look at the forecasts for power consumption for the year 2014:
+
+```{r}
+power_fit %>% forecast(h=12) %>%
+  autoplot(power)
+```
+
+The forecast seems reasonable from a visual perspective.
+
+Finally, we save the forecast in a .csv document:
+
+```{r eval=FALSE}
+forecast_power <- power_fit %>% forecast(h=12)
+
+write.csv(forecast_power,"forecast_power.csv")
+```
