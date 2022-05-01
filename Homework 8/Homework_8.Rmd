@@ -1,0 +1,279 @@
+---
+title: "DATA 624 Homework 8"
+author: "Mario Pena"
+date: "April 24, 2022"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(caret)
+library(kernlab)
+library(earth)
+library(gridExtra)
+```
+
+### Exercise 7.2
+
+Friedman (1991) introduced several benchmark data sets create by simulation. One of these simulations used the following nonlinear equation to create data:
+
+$y = 10 sin(\pi x_1x_2) + 20(x_3 − 0.5)^2 + 10x_4 + 5x_5 + N(0, \sigma^2)$
+
+where the *x* values are random variables uniformly distributed between [0, 1] (there are also 5 other non-informative variables also created in the simulation). The package mlbench contains a function called **mlbench.friedman1** that simulates these data:
+
+```{r}
+library(mlbench)
+set.seed(200)
+trainingData <- mlbench.friedman1(200, sd = 1)
+## We convert the 'x' data from a matrix to a data frame
+## One reason is that this will give the columns names.
+trainingData$x <- data.frame(trainingData$x)
+## Look at the data using
+featurePlot(trainingData$x, trainingData$y)
+## or other methods.
+
+## This creates a list with a vector 'y' and a matrix
+## of predictors 'x'. Also simulate a large test set to
+## estimate the true error rate with good precision:
+testData <- mlbench.friedman1(5000, sd = 1)
+testData$x <- data.frame(testData$x)
+```
+
+**(a) Tune several models on these data. For example:**
+
+```{r}
+library(caret)
+knnModel <- train(x = trainingData$x,
+                  y = trainingData$y,
+                  method = "knn",
+                  preProc = c("center", "scale"),
+                  tuneLength = 10)
+knnModel
+```
+
+```{r}
+knnPred <- predict(knnModel, newdata = testData$x)
+## The function 'postResample' can be used to get the test set
+## perforamnce values
+postResample(pred = knnPred, obs = testData$y)
+```
+
+The first model we will try is a tuned SVM model:
+
+```{r}
+svmRTuned <- train(x = trainingData$x,
+                   y = trainingData$y,
+                   method = "svmRadial",
+                   preProc = c("center", "scale"),
+                   tuneLength = 10,
+                   trControl = trainControl(method = "cv"))
+
+svmRTuned
+```
+
+```{r}
+svmPred <- predict(svmRTuned, newdata = testData$x)
+## The function 'postResample' can be used to get the test set
+## perforamnce values
+postResample(pred = svmPred, obs = testData$y)
+```
+
+Results on test data: RMSE 2.08, Rsquared 0.82, MAE 1.58
+
+Next we'll fit a Multivariate Adaptive Regression Spline model:
+
+```{r}
+marsFit <- earth(trainingData$x, trainingData$y)
+      
+summary(marsFit)
+```
+
+```{r}
+marsPred <- predict(marsFit, newdata = testData$x)
+## The function 'postResample' can be used to get the test set
+## perforamnce values
+postResample(pred = marsPred, obs = testData$y)
+```
+
+Results on test data: RMSE 1.81, Rsquared 0.87, MAE 1.39
+
+Lastly, we fit a Neural Networks model:
+
+```{r}
+nnetAvg <- avNNet(trainingData$x, trainingData$y,
+                  size = 5,
+                  decay = 0.01,
+                  ## Specify how many models to average
+                  repeats = 5,
+                  linout = TRUE,
+                  ## Reduce the amount of printed output
+                  trace = FALSE,
+                  ## Expand the number of iterations to find
+                  ## parameter estimates..
+                  maxit = 500)
+      
+                  
+summary(nnetAvg)
+```
+
+```{r}
+nnetPred <- predict(nnetAvg, newdata = testData$x)
+## The function 'postResample' can be used to get the test set
+## perforamnce values
+postResample(pred = nnetPred, obs = testData$y)
+```
+
+Results on test data: RMSE 1.77, Rsquared 0.87, MAE 1.31
+
+
+**(b) Which models appear to give the best performance? Does MARS select the informative predictors (those named X1–X5)?**
+
+The models I created all seem to perform very well with only marginal differences, however, they all outperform the KNN model. In terms of best results based on RMSE, Rsquare and MAE, the Neural Networks was the best performing model.
+
+```{r}
+varImp(marsFit)
+```
+
+To answer the question whether MARS selects the informative predictors, we can use at the `varImp()` function, which shows us that this model in fact uses the informative predictors (X1-X5) and X6 as well.
+
+
+### Exercise 7.5
+
+Exercise 6.3 describes data for a chemical manufacturing process. Use the same data imputation, data splitting, and pre-processing steps as before and train several nonlinear regression models.
+
+```{r}
+library(AppliedPredictiveModeling)
+data("ChemicalManufacturingProcess")
+```
+
+```{r}
+preProcValues <- preProcess(ChemicalManufacturingProcess, method = c("knnImpute"))
+data_imp <- predict(preProcValues, ChemicalManufacturingProcess)
+```
+
+```{r}
+set.seed(123)
+index <- createDataPartition(data_imp$Yield, p=0.8, list=FALSE) 
+Train <- data_imp[index, ]
+Test <- data_imp[-index, ]
+```
+
+```{r warning=FALSE}
+trans_train <- preProcess(Train, method = c("center", "scale"))
+trans_test <- preProcess(Test, method = c("center", "scale"))
+
+Train_prep <- predict(trans_train, Train)
+Test_prep <- predict(trans_test, Test)
+```
+
+KNN:
+```{r warning=FALSE}
+knnModel2 <- train(x = Train[, 2:58],
+                  y = Train$Yield,
+                  method = "knn",
+                  preProc = c("center", "scale"),
+                  tuneLength = 10)
+
+knnPred2 <- predict(knnModel2, newdata = Test[, 2:58])
+
+postResample(pred = knnPred2, obs = Test$Yield)
+```
+
+SVM:
+```{r}
+svmRTuned2 <- train(x = Train[, 2:58],
+                   y = Train$Yield,
+                   method = "svmRadial",
+                   preProc = c("center", "scale"),
+                   tuneLength = 10,
+                   trControl = trainControl(method = "cv"))
+
+svmPred2 <- predict(svmRTuned2, newdata = Test[, 2:58])
+
+postResample(pred = svmPred2, obs = Test$Yield)
+```
+
+MARS:
+```{r}
+marsFit2 <- earth(Train_prep[, 2:58], Train_prep$Yield)
+      
+marsPred2 <- predict(marsFit2, newdata = Test_prep[, 2:58])
+
+postResample(pred = marsPred2, obs = Test_prep$Yield)
+```
+
+NN:
+```{r}
+nnetAvg2 <- avNNet(Train_prep[, 2:58], Train_prep$Yield,
+                  size = 5,
+                  decay = 0.01,
+                  repeats = 5,
+                  linout = TRUE,
+                  trace = FALSE,
+                  maxit = 500)
+      
+                  
+nnetPred2 <- predict(nnetAvg2, newdata = Test_prep[, 2:58])
+
+postResample(pred = nnetPred2, obs = Test_prep$Yield)
+```
+
+
+**(a) Which nonlinear regression model gives the optimal resampling and test set performance?**
+
+The nonlinear regression with the optimal resampling and test set performance in this case is the SVM model, which also outperforms by a slight difference the elastic net model used in the previous homework.
+
+**(b) Which predictors are most important in the optimal nonlinear regression model? Do either the biological or process variables dominate the list? How do the top ten important predictors compare to the top ten predictors from the optimal linear model?**
+
+```{r}
+varImp(svmRTuned2)
+```
+
+The most important predictor in the SVM model is "ManufacturingProcess32". However, within the first 20 important predictors we see a good combination of both the biological and process variables.
+
+**(c) Explore the relationships between the top predictors and the response for the predictors that are unique to the optimal nonlinear regression model. Do these plots reveal intuition about the biological or process predictors and their relationship with yield?**
+
+```{r}
+p1 <- ggplot(data_imp, aes(x = ManufacturingProcess32, y = Yield)) + geom_point()
+p2 <- ggplot(data_imp, aes(x = BiologicalMaterial06, y = Yield)) + geom_point()
+p3 <- ggplot(data_imp, aes(x = BiologicalMaterial03, y = Yield)) + geom_point()
+p4 <- ggplot(data_imp, aes(x = ManufacturingProcess13, y = Yield)) + geom_point()
+p5 <- ggplot(data_imp, aes(x = ManufacturingProcess36, y = Yield)) + geom_point()
+p6 <- ggplot(data_imp, aes(x = ManufacturingProcess31, y = Yield)) + geom_point()
+p7 <- ggplot(data_imp, aes(x = BiologicalMaterial02, y = Yield)) + geom_point()
+p8 <- ggplot(data_imp, aes(x = ManufacturingProcess17, y = Yield)) + geom_point()
+p9 <- ggplot(data_imp, aes(x = ManufacturingProcess09, y = Yield)) + geom_point()
+p10 <- ggplot(data_imp, aes(x = BiologicalMaterial12, y = Yield)) + geom_point()
+
+
+grid.arrange(p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, nrow = 2)
+```
+
+```{r}
+p11 <- ggplot(data_imp, aes(x = ManufacturingProcess06, y = Yield)) + geom_point()
+p12 <- ggplot(data_imp, aes(x = BiologicalMaterial11, y = Yield)) + geom_point()
+p13 <- ggplot(data_imp, aes(x = ManufacturingProcess33, y = Yield)) + geom_point()
+p14 <- ggplot(data_imp, aes(x = ManufacturingProcess29, y = Yield)) + geom_point()
+p15 <- ggplot(data_imp, aes(x = BiologicalMaterial04, y = Yield)) + geom_point()
+p16 <- ggplot(data_imp, aes(x = ManufacturingProcess11, y = Yield)) + geom_point()
+p17 <- ggplot(data_imp, aes(x = BiologicalMaterial01, y = Yield)) + geom_point()
+p18 <- ggplot(data_imp, aes(x = BiologicalMaterial08, y = Yield)) + geom_point()
+p19 <- ggplot(data_imp, aes(x = BiologicalMaterial09, y = Yield)) + geom_point()
+p20 <- ggplot(data_imp, aes(x = ManufacturingProcess30, y = Yield)) + geom_point()
+
+
+grid.arrange(p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, nrow = 2)
+```
+
+From what we can see on the plot of the first 20 important predictors and yield, some of the process variables seem to have either a positive or negative relationship as well as some that do not have a defined relationship such as in the case with process "36", "31", "29" and "30". In the case of the biological variables, they all seem to have a positive relationship with yield. To answer the question above, we can say that these plots reveal intuition about the biological predictors in respect to their relationship with yield.
